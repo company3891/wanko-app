@@ -79,7 +79,7 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KID}.p8" \
             -authenticationKeyID "$KID" -authenticationKeyIssuerID "$ISS"
 
-      - name: App Store Connect へ上げる
+      - name: 書き出す（.ipa を作る）
         env:
           TEAM: ${{ secrets.APPLE_TEAM_ID }}
           KID: ${{ secrets.ASC_KEY_ID }}
@@ -93,8 +93,33 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KID}.p8" \
             -authenticationKeyID "$KID" -authenticationKeyIssuerID "$ISS"
+          ls -la "$RUNNER_TEMP/out"
+
+      # 2026-10-15：書き出しと同時に上げる（destination=upload）は、App Store Connect の窓口で
+      # 「Cannot verify client's JWT headers」と断られた。署名の窓口（Apple Developer）は同じ鍵で通る。
+      # 上げるのは altool に任せて、経路を分ける。落ちても .ipa が残るので切り分けやすい。
+      - name: App Store Connect へ上げる
+        env:
+          KID: ${{ secrets.ASC_KEY_ID }}
+          ISS: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          cp "$RUNNER_TEMP/keys/AuthKey_${KID}.p8" "$HOME/.appstoreconnect/private_keys/"
+          IPA=$(ls "$RUNNER_TEMP/out"/*.ipa | head -1)
+          echo "上げるもの：$IPA"
+          xcrun altool --upload-app -f "$IPA" --type ios \
+            --apiKey "$KID" --apiIssuer "$ISS"
           echo "上げた：版 ${{ inputs.version }}（ビルド ${{ github.run_number }}）。15〜30分ほどで TestFlight に出る"
+
+      - name: .ipa を残す（上げられなかったときの手がかり）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wanko-ipa-${{ inputs.version }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/out/*.ipa
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: 鍵を消す
         if: always()
-        run: rm -rf "$RUNNER_TEMP/keys"
+        run: rm -rf "$RUNNER_TEMP/keys" "$HOME/.appstoreconnect"
