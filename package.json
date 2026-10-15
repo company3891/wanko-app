@@ -1,0 +1,21 @@
+{
+  "name": "wanko-daisengoku-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "わんこ大戦国 を iPhone アプリに包む一式（Capacitor）",
+  "scripts": {
+    "www": "node tools/fill-www.mjs",
+    "sync": "node tools/fill-www.mjs && npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.4",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/share": "8.0.3",
+    "@capacitor/splash-screen": "8.0.2",
+    "@capacitor/status-bar": "8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

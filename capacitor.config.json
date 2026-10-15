@@ -1,0 +1,25 @@
+{
+  "appId": "app.wankodaisengoku",
+  "appName": "わんこ大戦国",
+  "webDir": "www",
+  "backgroundColor": "#12100e",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#12100e",
+    "scrollEnabled": false,
+    "allowsLinkPreview": false,
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "launchAutoHide": true,
+      "backgroundColor": "#12100e",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "DARK"
+    }
+  }
+}

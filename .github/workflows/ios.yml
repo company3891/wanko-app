@@ -1,0 +1,100 @@
+# iPhone 版を焼いて TestFlight へ上げる（2026-10-15）
+#
+# 悠さんの手元には Mac が無いので、GitHub が貸してくれる Mac の上で焼く。
+# ゲーム本体は公開の repo（company3891/wanko-daisengoku）に出しているウェブ版をそのまま使う。
+# この repo に置くのは「包み」だけ（Capacitor の設定と iOS の殻）。
+#
+# 動かし方：GitHub の Actions → 「iPhone を焼いて TestFlight へ」→ Run workflow
+#
+# 前もって Settings → Secrets and variables → Actions に入れておくもの
+#   APPLE_TEAM_ID   … Apple Developer の Team ID（10桁の英数字）
+#   ASC_KEY_ID      … App Store Connect の API キーの Key ID
+#   ASC_ISSUER_ID   … 同じく Issuer ID
+#   ASC_KEY_P8      … ダウンロードした AuthKey_XXXX.p8 の中身（-----BEGIN から END まで全部）
+name: iPhone を焼いて TestFlight へ
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'ストアに出す版（例 1.0.0）'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: 包みを取ってくる
+        uses: actions/checkout@v4
+
+      - name: ゲーム本体（ウェブ版）を取ってくる
+        uses: actions/checkout@v4
+        with:
+          repository: company3891/wanko-daisengoku
+          path: web-app
+          fetch-depth: 1
+
+      - name: いちばん新しい Xcode を選ぶ
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$X"
+          xcodebuild -version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 道具を入れる
+        run: npm ci
+
+      - name: www を詰めて iOS に写す
+        env:
+          WEB_APP_DIR: ${{ github.workspace }}/web-app
+        run: |
+          node tools/fill-www.mjs
+          npx cap sync ios
+
+      - name: App Store Connect の鍵を置く
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8"
+
+      - name: 焼く（archive）
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          KID: ${{ secrets.ASC_KEY_ID }}
+          ISS: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" archive \
+            DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="${{ inputs.version }}" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KID}.p8" \
+            -authenticationKeyID "$KID" -authenticationKeyIssuerID "$ISS"
+
+      - name: App Store Connect へ上げる
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          KID: ${{ secrets.ASC_KEY_ID }}
+          ISS: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          sed "s/__TEAM__/$TEAM/" ios/ci/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/out" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KID}.p8" \
+            -authenticationKeyID "$KID" -authenticationKeyIssuerID "$ISS"
+          echo "上げた：版 ${{ inputs.version }}（ビルド ${{ github.run_number }}）。15〜30分ほどで TestFlight に出る"
+
+      - name: 鍵を消す
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
