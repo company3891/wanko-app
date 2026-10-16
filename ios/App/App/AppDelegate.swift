@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import AVFoundation
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,7 +8,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // 音の扱いを ambient に（2026-10-16）。
+        // 既定のままだと、効果音の <audio> が鳴った時点で iOS が「音楽の再生」とみなし、
+        // 裏に回っても囃子が鳴り続け、ロック画面に再生の板まで出ていた（悠さんの実測 10/15）。
+        // ambient なら 消音スイッチに従い、ほかのアプリの音とも混ざり、裏では鳴らない。
+        try? AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
         return true
     }
 
